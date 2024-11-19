@@ -1,0 +1,204 @@
+name: SemVer Release Action
+description: Automates semantic versioning and release.
+
+inputs:
+  version_type:
+    description: "Version type to increment (major, minor, patch)"
+    required: true
+    default: 'select'
+  set_version:
+    description: "Set version number explicitly (e.g., 1.2.3). Leave empty to increment."
+    required: false
+  trunk_branch_name:
+    description: "The main branch from which releases are made."
+    required: true
+    default: 'main'
+  ikmdevops_pat:
+    description: "PAT TOKEN for IKMDevops User"
+    required: true
+  ikmdevops_email:
+    description: "Email For IKMDevops User"
+    default: 'devops@ikm.dev'
+  github_token:
+    description: "GitHub Token"
+    required: true
+  gpg_passphrase:
+    description: "GPG Passphrase"
+    required: true
+  gpg_key:
+    description: "GPG Key"
+    required: true
+  ossrh_username:
+    description: "OSSRH USERNAME"
+    required: true
+  ossrh_token:
+    description: "OSSRH Token"
+    required: true
+
+outputs:
+  new_version:
+    description: "The new version number."
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{inputs.ikmdevops_pat}}
+        fetch-depth: 0  # Fetch all history to get all tags
+
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '21'
+        server-id: ossrh
+        server-username: MAVEN_USERNAME
+        server-password: MAVEN_CENTRAL_TOKEN
+        gpg-private-key: ${{ inputs.gpg_key }}
+        gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+#    - name: Build Protoc Docker container
+#      uses: docker/build-push-action@v6
+#      if: github.event.repository.name == 'tinkar-schema'
+#      with:
+#        push: false
+#        context: .
+#        file: protoc.dockerfile
+#        tags: tinkar-schema-protoc:latest
+#
+#    - name: Generate Java Code
+#      if: github.event.repository.name == 'tinkar-schema'
+#      shell: bash
+#      run: |
+#        sudo docker run -v ./src/main/java-generated:/home/proto-builder/src/main/java-generated --rm tinkar-schema-protoc:latest
+#
+#    - name: list java code
+#      if: github.event.repository.name == 'tinkar-schema'
+#      shell: bash
+#      run: |
+#        ls src/main/java-generated
+
+    - name: Determine Next Version
+      id: version
+      shell: bash
+      run: |
+        # Fetch all tags
+        git fetch --tags
+
+        # Get the latest tag matching SemVer pattern
+        LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+        if [ -z "$LATEST_TAG" ]; then
+          CURRENT_VERSION="0.0.0"
+        else
+          CURRENT_VERSION=$(echo $LATEST_TAG | sed 's/^v//')
+        fi
+        echo "Current version: $CURRENT_VERSION"
+
+        VERSION_TYPE="${{ inputs.version_type }}"
+        SET_VERSION="${{ inputs.set_version }}"
+
+        if [ -n "$SET_VERSION" ]; then
+          NEW_VERSION="$SET_VERSION"
+        else
+          case "$VERSION_TYPE" in
+            major)
+              NEW_VERSION=$(echo $CURRENT_VERSION | awk -F. '{print $1+1 ".0.0"}')
+              ;;
+            minor)
+              NEW_VERSION=$(echo $CURRENT_VERSION | awk -F. '{print $1 "." $2+1 ".0"}')
+              ;;
+            patch)
+              NEW_VERSION=$(echo $CURRENT_VERSION | awk -F. '{print $1 "." $2 "." $3+1}')
+              ;;
+            *)
+              echo "Invalid version_type specified: $VERSION_TYPE. Must be 'major', 'minor', or 'patch'."
+              exit 1
+              ;;
+          esac
+        fi
+
+        # Validate that the new version is greater than the current version
+        if [ "$(printf '%s\n' "$CURRENT_VERSION" "$NEW_VERSION" | sort -V | head -n1)" != "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" = "$NEW_VERSION" ]; then
+          echo "Specified version $NEW_VERSION is not greater than current version $CURRENT_VERSION"
+          exit 1
+        fi
+
+        echo "New version: $NEW_VERSION"
+        echo "::set-output name=new_version::$NEW_VERSION"
+
+    - name: Update Maven Project Version
+      run: |
+        mvn versions:set -DnewVersion=${{ steps.version.outputs.new_version }} -DgenerateBackupPoms=false
+
+    - name: Commit Version Change
+      run: |
+        git config user.name "${{ github.actor }}"
+        git config user.email "${{ github.actor }}@users.noreply.github.com"
+        git add pom.xml
+        git commit -m "Bump version to ${{ steps.version.outputs.new_version }}"
+        git push origin ${{ inputs.trunk_branch_name }}
+
+    - name: Create and Push Tag
+      run: |
+        git tag -a v${{ steps.version.outputs.new_version }} -m "Release v${{ steps.version.outputs.new_version }}"
+        git push origin v${{ steps.version.outputs.new_version }}
+
+    - name: Create Release
+      env:
+        GPG_KEY: ${{ inputs.gpg_key }}
+        GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
+        OSSRH_USERNAME: ${{ inputs.ossrh_username }}
+        OSSRH_TOKEN: ${{ inputs.ossrh_token }}
+      run: |
+        # Import GPG key
+        echo "$GPG_KEY" | gpg --batch --import
+
+        # Run Maven deploy (adjust goals and options as needed)
+        mvn clean deploy -P release \
+          -Dgpg.passphrase=$GPG_PASSPHRASE \
+          -Dossrh.username=$OSSRH_USERNAME \
+          -Dossrh.token=$OSSRH_TOKEN
+
+    - name: Output New Version
+      run: echo "Released version ${{ steps.version.outputs.new_version }}"
+
+    - name: Checkout Code Repository
+      uses: actions/checkout@v4
+      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
+      with:
+        ref: ${{steps.splitCurrentVersion.outputs._0}}
+
+    - name: Maven Build
+      shell: bash
+      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
+      run: |
+        ./mvnw clean install -U \
+         --batch-mode \
+         -e \
+         -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+         -Dmaven.build.cache.enabled=false \
+         -PcodeQuality
+
+    - name: Publish To OSSRH (Maven Central Staging)
+      shell: bash
+      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
+      run: |
+        ./mvnw deploy -U\
+            --batch-mode \
+            -e \
+            -U \
+            -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+            -DskipTests \
+            -DskipITs \
+            -Dmaven.main.skip \
+            -Dmaven.test.skip \
+            -DrepositoryId=ossrh \
+            -DrepositoryIdOSSRH='true' \
+            -PstageOSSRH \
+            -Dmaven.build.cache.enabled=false
+      env:
+        MAVEN_USERNAME: ${{ inputs.ossrh_username }}
+        MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
+        MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
