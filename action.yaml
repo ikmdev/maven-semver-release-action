@@ -129,10 +129,12 @@ runs:
         echo "::set-output name=new_version::$NEW_VERSION"
 
     - name: Update Maven Project Version
+      shell: bash
       run: |
         mvn versions:set -DnewVersion=${{ steps.version.outputs.new_version }} -DgenerateBackupPoms=false
 
     - name: Commit Version Change
+      shell: bash
       run: |
         git config user.name "${{ github.actor }}"
         git config user.email "${{ github.actor }}@users.noreply.github.com"
@@ -141,11 +143,13 @@ runs:
         git push origin ${{ inputs.trunk_branch_name }}
 
     - name: Create and Push Tag
+      shell: bash
       run: |
         git tag -a v${{ steps.version.outputs.new_version }} -m "Release v${{ steps.version.outputs.new_version }}"
         git push origin v${{ steps.version.outputs.new_version }}
 
     - name: Create Release
+      shell: bash
       env:
         GPG_KEY: ${{ inputs.gpg_key }}
         GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
@@ -162,6 +166,7 @@ runs:
           -Dossrh.token=$OSSRH_TOKEN
 
     - name: Output New Version
+      shell: bash
       run: echo "Released version ${{ steps.version.outputs.new_version }}"
 
     - name: Checkout Code Repository
