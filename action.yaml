@@ -3,9 +3,9 @@ description: Automates semantic versioning and release.
 
 inputs:
   version_type:
-    description: "Version type to increment (major, minor, patch)"
+    description: "Version type to increment (major, minor, patch, select)"
     required: true
-    default: 'patch'
+    default: 'select'
   set_version:
     description: "Set version number explicitly (e.g., 1.2.3). Leave empty to increment."
     required: false
@@ -165,8 +165,8 @@ runs:
     - name: Commit Version Change
       shell: bash
       run: |
-        git config user.name "${{ github.actor }}"
-        git config user.email "${{ github.actor }}@users.noreply.github.com"
+        git config user.name "ikmdevops"
+        git config user.email ${{inputs.ikmdevops_email}}
         git add pom.xml
         git commit -m "Release version ${{ steps.version.outputs.new_version }}"
         git push origin ${{ inputs.trunk_branch_name }}
