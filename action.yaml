@@ -59,27 +59,6 @@ runs:
         gpg-private-key: ${{ inputs.gpg_key }}
         gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
-#    - name: Build Protoc Docker container
-#      uses: docker/build-push-action@v6
-#      if: github.event.repository.name == 'tinkar-schema'
-#      with:
-#        push: false
-#        context: .
-#        file: protoc.dockerfile
-#        tags: tinkar-schema-protoc:latest
-#
-#    - name: Generate Java Code
-#      if: github.event.repository.name == 'tinkar-schema'
-#      shell: bash
-#      run: |
-#        sudo docker run -v ./src/main/java-generated:/home/proto-builder/src/main/java-generated --rm tinkar-schema-protoc:latest
-#
-#    - name: list java code
-#      if: github.event.repository.name == 'tinkar-schema'
-#      shell: bash
-#      run: |
-#        ls src/main/java-generated
-
     - name: Verify SNAPSHOT Version
       shell: bash
       run: |
@@ -89,94 +68,36 @@ runs:
           exit 1
         fi
 
-    - name: Determine Next Version
-      id: version
+    - name: Determine Release Version
+      id: release_version
       shell: bash
       run: |
-        # Fetch all tags
-        git fetch --tags
-
-        # Get the latest tag matching SemVer pattern
-        LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
-        if [ -z "$LATEST_TAG" ]; then
-          CURRENT_VERSION="0.0.0"
-        else
-          CURRENT_VERSION=$(echo $LATEST_TAG | sed 's/^v//')
-        fi
-        echo "Current version from tags: $CURRENT_VERSION"
-
-        VERSION_TYPE="${{ inputs.version_type }}"
-        SET_VERSION="${{ inputs.set_version }}"
-
         # Remove '-SNAPSHOT' from current pom version
         CURRENT_POM_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-        CURRENT_POM_VERSION=${CURRENT_POM_VERSION%-SNAPSHOT}
+        RELEASE_VERSION=${CURRENT_POM_VERSION%-SNAPSHOT}
+        echo "Release version: $RELEASE_VERSION"
+        echo "::set-output name=release_version::$RELEASE_VERSION"
 
-        # Verify that the current pom version matches the latest tag
-        if [ "$CURRENT_POM_VERSION" != "$CURRENT_VERSION" ]; then
-          echo "ERROR: The current pom version ($CURRENT_POM_VERSION) does not match the latest tag version ($CURRENT_VERSION)."
-          exit 1
-        fi
-
-        if [ -n "$SET_VERSION" ]; then
-          NEW_VERSION="$SET_VERSION"
-        else
-          # Validate that version_type is one of the allowed values
-          if [[ "$VERSION_TYPE" != "major" && "$VERSION_TYPE" != "minor" && "$VERSION_TYPE" != "patch" ]]; then
-            echo "Invalid version_type specified: $VERSION_TYPE. Must be 'major', 'minor', or 'patch'."
-            exit 1
-          fi
-
-          # Split the current version into components
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-
-          case "$VERSION_TYPE" in
-            major)
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
-              ;;
-            minor)
-              MINOR=$((MINOR + 1))
-              PATCH=0
-              ;;
-            patch)
-              PATCH=$((PATCH + 1))
-              ;;
-          esac
-
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-        fi
-
-        # Validate that the new version is greater than the current version
-        if [ "$(printf '%s\n' "$CURRENT_VERSION" "$NEW_VERSION" | sort -V | head -n1)" != "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" = "$NEW_VERSION" ]; then
-          echo "Specified version $NEW_VERSION is not greater than current version $CURRENT_VERSION"
-          exit 1
-        fi
-
-        echo "New version: $NEW_VERSION"
-        echo "::set-output name=new_version::$NEW_VERSION"
-
-    - name: Update Maven Project Version
+    - name: Update Maven Project Version to Release Version
       shell: bash
       run: |
-        mvn versions:set -DnewVersion=${{ steps.version.outputs.new_version }} -DgenerateBackupPoms=false
+        mvn versions:set -DnewVersion=${{ steps.release_version.outputs.release_version }} -DgenerateBackupPoms=false
 
-    - name: Commit Version Change
+    - name: Commit Release Version Change
       shell: bash
       run: |
         git config user.name "ikmdevops"
         git config user.email ${{inputs.ikmdevops_email}}
         git add pom.xml
-        git commit -m "Release version ${{ steps.version.outputs.new_version }}"
+        git commit -m "Prepare release version ${{ steps.release_version.outputs.release_version }}"
         git push origin ${{ inputs.trunk_branch_name }}
 
     - name: Create and Push Tag
       shell: bash
       run: |
-        git tag -a v${{ steps.version.outputs.new_version }} -m "Release v${{ steps.version.outputs.new_version }}"
-        git push origin v${{ steps.version.outputs.new_version }}
-
+        git tag -a v${{ steps.release_version.outputs.release_version }} -m "Release v${{ steps.release_version.outputs.release_version }}"
+        git push origin v${{ steps.release_version.outputs.release_version }}
+        
     - name: Create Release
       shell: bash
       env:
@@ -236,3 +157,65 @@ runs:
         MAVEN_USERNAME: ${{ inputs.ossrh_username }}
         MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
         MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
+
+    - name: Determine Next Snapshot Version
+      id: next_snapshot_version
+      shell: bash
+      run: |
+        VERSION_TYPE="${{ inputs.version_type }}"
+        SET_VERSION="${{ inputs.set_version }}"
+        RELEASE_VERSION="${{ steps.release_version.outputs.release_version }}"
+        
+        # Split the release version into components
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
+        
+        if [ -n "$SET_VERSION" ]; then
+        # If set_version is provided, increment based on it
+        NEXT_SNAPSHOT_VERSION="${SET_VERSION}-SNAPSHOT"
+        else
+        # Validate that version_type is one of the allowed values
+        if [[ "$VERSION_TYPE" != "major" && "$VERSION_TYPE" != "minor" && "$VERSION_TYPE" != "patch" ]]; then
+         echo "Invalid version_type specified: $VERSION_TYPE. Must be 'major', 'minor', or 'patch'."
+         exit 1
+        fi
+        
+        case "$VERSION_TYPE" in
+         major)
+           MAJOR=$((MAJOR + 1))
+           MINOR=0
+           PATCH=0
+           ;;
+         minor)
+           MINOR=$((MINOR + 1))
+           PATCH=0
+           ;;
+         patch)
+           PATCH=$((PATCH + 1))
+           ;;
+        esac
+        
+        NEXT_SNAPSHOT_VERSION="${MAJOR}.${MINOR}.${PATCH}-SNAPSHOT"
+        fi
+        
+        echo "Next snapshot version: $NEXT_SNAPSHOT_VERSION"
+        echo "::set-output name=next_snapshot_version::$NEXT_SNAPSHOT_VERSION"
+
+    - name: Update Maven Project Version to Next Snapshot Version
+      shell: bash
+      run: |
+        mvn versions:set -DnewVersion=${{ steps.next_snapshot_version.outputs.next_snapshot_version }} -DgenerateBackupPoms=false
+
+    - name: Commit Next Snapshot Version Change
+      shell: bash
+      run: |
+        git config user.name "ikmdevops"
+        git config user.email ${{inputs.ikmdevops_email}}
+        git add pom.xml
+        git commit -m "Prepare for next development iteration ${{ steps.next_snapshot_version.outputs.next_snapshot_version }}"
+        git push origin ${{ inputs.trunk_branch_name }}
+
+    - name: Output Release Information
+      shell: bash
+      run: |
+        echo "Released version ${{ steps.release_version.outputs.release_version }}"
+        echo "Updated to next snapshot version ${{ steps.next_snapshot_version.outputs.next_snapshot_version }}"
