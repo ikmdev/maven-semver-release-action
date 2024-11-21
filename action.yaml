@@ -211,9 +211,17 @@ runs:
     - name: Update Maven Project Version to Next Snapshot Version
       shell: bash
       run: |
-        mvn versions:set -DnewVersion=${{ steps.next_snapshot_version.outputs.next_snapshot_version }} -DgenerateBackupPoms=false
+        echo "Before updating next snapshot version:"
+        cat pom.xml
+        mvn versions:set -DnewVersion=${{ steps.next_snapshot_version.outputs.next_snapshot_version }} -DgenerateBackupPoms=false -DprocessAllModules
         echo "After setting next snapshot version"
+        cat pom.xml
+
+    - name: Git Status After Version Update
+      shell: bash
+      run: |
         git status
+        git diff
 
     - name: Commit Next Snapshot Version Change
       shell: bash
