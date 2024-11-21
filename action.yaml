@@ -76,7 +76,7 @@ runs:
         CURRENT_POM_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
         RELEASE_VERSION=${CURRENT_POM_VERSION%-SNAPSHOT}
         echo "Release version: $RELEASE_VERSION"
-        echo "::set-output name=release_version::$RELEASE_VERSION"
+        echo "{release_version}={RELEASE_VERSION}" >> $GITHUB_OUTPUT
 
     - name: Update Maven Project Version to Release Version
       shell: bash
@@ -118,7 +118,7 @@ runs:
       uses: actions/checkout@v4
       if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
       with:
-        ref: ${{ inputs.trunk_branch_name}}
+        ref: ${{ steps.release_version.outputs._0 }}
         persist-credentials: true
 
     - name: Maven Build
