@@ -118,7 +118,8 @@ runs:
       uses: actions/checkout@v4
       if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
       with:
-        ref: ${{steps.splitCurrentVersion.outputs._0}}
+        ref: ${{ inputs.trunk_branch_name}}
+        persist-credentials: true
 
     - name: Maven Build
       shell: bash
@@ -159,7 +160,7 @@ runs:
         # Ensure the local branch is up-to-date before making new changes
         git fetch origin ${{ inputs.trunk_branch_name }}
         git checkout ${{ inputs.trunk_branch_name }}
-        git reset --hard origin/${{ inputs.trunk_branch_name }}
+        # git reset --hard origin/${{ inputs.trunk_branch_name }}
 
     - name: Determine Next Snapshot Version
       id: next_snapshot_version
