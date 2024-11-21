@@ -193,7 +193,7 @@ runs:
         fi
         
         echo "Next snapshot version: $NEXT_SNAPSHOT_VERSION"
-        echo "::set-output name=next_snapshot_version::$NEXT_SNAPSHOT_VERSION"
+        echo "{next_snapshot_version}={NEXT_SNAPSHOT_VERSION}" >> $GITHUB_OUTPUT
 
     - name: Update Maven Project Version to Next Snapshot Version
       shell: bash
@@ -207,6 +207,9 @@ runs:
         git config user.email ${{inputs.ikmdevops_email}}
         git add pom.xml
         git commit -m "Prepare for next development iteration ${{ steps.next_snapshot_version.outputs.next_snapshot_version }}"
+        
+        # **Perform git pull before pushing**
+        git pull --rebase origin ${{ inputs.trunk_branch_name }}
         git push origin ${{ inputs.trunk_branch_name }}
 
     - name: Output Release Information
