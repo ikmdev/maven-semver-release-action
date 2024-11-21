@@ -153,6 +153,14 @@ runs:
 #        MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
 #        MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
 
+    - name: Pull Latest Changes Before Next Snapshot Version
+      shell: bash
+      run: |
+        # Ensure the local branch is up-to-date before making new changes
+        git fetch origin ${{ inputs.trunk_branch_name }}
+        git checkout ${{ inputs.trunk_branch_name }}
+        git reset --hard origin/${{ inputs.trunk_branch_name }}
+
     - name: Determine Next Snapshot Version
       id: next_snapshot_version
       shell: bash
@@ -207,9 +215,6 @@ runs:
         git config user.email ${{inputs.ikmdevops_email}}
         git add pom.xml
         git commit -m "Prepare for next development iteration ${{ steps.next_snapshot_version.outputs.next_snapshot_version }}"
-        
-        # **Perform git pull before pushing**
-        git pull --rebase origin ${{ inputs.trunk_branch_name }}
         git push origin ${{ inputs.trunk_branch_name }}
 
     - name: Output Release Information
