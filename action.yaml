@@ -47,6 +47,8 @@ runs:
       with:
         token: ${{inputs.ikmdevops_pat}}
         fetch-depth: 0  # Fetch all history to get all tags
+        ref: ${{ inputs.trunk_branch_name }}
+        persist-credentials: true
 
     - name: Set up Java
       uses: actions/setup-java@v4
@@ -82,6 +84,8 @@ runs:
       shell: bash
       run: |
         mvn versions:set -DnewVersion=${{ steps.release_version.outputs.release_version }} -DgenerateBackupPoms=false
+        echo "After setting release version"
+        git status
 
     - name: Commit Release Version Change
       shell: bash
@@ -90,7 +94,7 @@ runs:
         git config user.email ${{inputs.ikmdevops_email}}
         git add pom.xml
         git commit -m "Prepare release version ${{ steps.release_version.outputs.release_version }}"
-        git push origin ${{ inputs.trunk_branch_name }}
+        git push origin HEAD:${{ inputs.trunk_branch_name }}
 
     - name: Create and Push Tag
       shell: bash
@@ -118,7 +122,7 @@ runs:
       uses: actions/checkout@v4
       if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
       with:
-        ref: ${{ steps.release_version.outputs._0 }}
+        ref: ${{ inputs.trunk_branch_name }}
         persist-credentials: true
 
     - name: Maven Build
@@ -132,35 +136,35 @@ runs:
          -Dmaven.build.cache.enabled=false \
          -PcodeQuality
 
-#    - name: Publish To OSSRH (Maven Central Staging)
-#      shell: bash
-#      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
-#      run: |
-#        ./mvnw deploy -U\
-#            --batch-mode \
-#            -e \
-#            -U \
-#            -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-#            -DskipTests \
-#            -DskipITs \
-#            -Dmaven.main.skip \
-#            -Dmaven.test.skip \
-#            -DrepositoryId=ossrh \
-#            -DrepositoryIdOSSRH='true' \
-#            -PstageOSSRH \
-#            -Dmaven.build.cache.enabled=false
-#      env:
-#        MAVEN_USERNAME: ${{ inputs.ossrh_username }}
-#        MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
-#        MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
+   # - name: Publish To OSSRH (Maven Central Staging)
+   #   shell: bash
+   #   if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
+   #   run: |
+   #     ./mvnw deploy -U\
+   #         --batch-mode \
+   #         -e \
+   #         -U \
+   #         -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+   #         -DskipTests \
+   #         -DskipITs \
+   #         -Dmaven.main.skip \
+   #         -Dmaven.test.skip \
+   #         -DrepositoryId=ossrh \
+   #         -DrepositoryIdOSSRH='true' \
+   #         -PstageOSSRH \
+   #         -Dmaven.build.cache.enabled=false
+   #   env:
+   #     MAVEN_USERNAME: ${{ inputs.ossrh_username }}
+   #     MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
+   #     MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
 
-    - name: Pull Latest Changes Before Next Snapshot Version
-      shell: bash
-      run: |
-        # Ensure the local branch is up-to-date before making new changes
-        git fetch origin ${{ inputs.trunk_branch_name }}
-        git checkout ${{ inputs.trunk_branch_name }}
-        # git reset --hard origin/${{ inputs.trunk_branch_name }}
+    # - name: Pull Latest Changes Before Next Snapshot Version
+    #   shell: bash
+    #   run: |
+    #     # Ensure the local branch is up-to-date before making new changes
+    #     git fetch origin ${{ inputs.trunk_branch_name }}
+    #     git checkout ${{ inputs.trunk_branch_name }}
+    #     # git reset --hard origin/${{ inputs.trunk_branch_name }}
 
     - name: Determine Next Snapshot Version
       id: next_snapshot_version
@@ -208,6 +212,8 @@ runs:
       shell: bash
       run: |
         mvn versions:set -DnewVersion=${{ steps.next_snapshot_version.outputs.next_snapshot_version }} -DgenerateBackupPoms=false
+        echo "After setting next snapshot version"
+        git status
 
     - name: Commit Next Snapshot Version Change
       shell: bash
@@ -216,7 +222,10 @@ runs:
         git config user.email ${{inputs.ikmdevops_email}}
         git add pom.xml
         git commit -m "Prepare for next development iteration ${{ steps.next_snapshot_version.outputs.next_snapshot_version }}"
-        git push origin ${{ inputs.trunk_branch_name }}
+        
+        # pull latest changes and rebase before pushing
+        git pull --rebase origin ${{ inputs.trunk_branch_name }}
+        git push origin HEAD:${{ inputs.trunk_branch_name }}
 
     - name: Output Release Information
       shell: bash
