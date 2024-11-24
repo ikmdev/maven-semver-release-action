@@ -78,7 +78,7 @@ runs:
         CURRENT_POM_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
         RELEASE_VERSION=${CURRENT_POM_VERSION%-SNAPSHOT}
         echo "Release version: $RELEASE_VERSION"
-        echo "{release_version}={RELEASE_VERSION}" >> $GITHUB_OUTPUT
+        echo "release_version={RELEASE_VERSION}" >> $GITHUB_OUTPUT
 
     - name: Update Maven Project Version to Release Version
       shell: bash
@@ -206,7 +206,7 @@ runs:
         fi
         
         echo "Next snapshot version: $NEXT_SNAPSHOT_VERSION"
-        echo "{next_snapshot_version}={NEXT_SNAPSHOT_VERSION}" >> $GITHUB_OUTPUT
+        echo "next_snapshot_version=$NEXT_SNAPSHOT_VERSION" >> $GITHUB_OUTPUT
 
     - name: Update Maven Project Version to Next Snapshot Version
       shell: bash
