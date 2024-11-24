@@ -136,23 +136,23 @@ runs:
          -Dmaven.build.cache.enabled=false \
          -PcodeQuality
 
-       - name: Publish To OSSRH (Maven Central Staging)
-         shell: bash
-         if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
-         run: |
-           ./mvnw deploy -U\
-               --batch-mode \
-               -e \
-               -U \
-               -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-               -DskipTests \
-               -DskipITs \
-               -Dmaven.main.skip \
-               -Dmaven.test.skip \
-               -DrepositoryId=ossrh \
-               -DrepositoryIdOSSRH='true' \
-               -PstageOSSRH \
-               -Dmaven.build.cache.enabled=false
+    - name: Publish To OSSRH (Maven Central Staging)
+      shell: bash
+      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
+      run: |
+        ./mvnw deploy -U\
+            --batch-mode \
+            -e \
+            -U \
+            -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+            -DskipTests \
+            -DskipITs \
+            -Dmaven.main.skip \
+            -Dmaven.test.skip \
+            -DrepositoryId=ossrh \
+            -DrepositoryIdOSSRH='true' \
+            -PstageOSSRH \
+            -Dmaven.build.cache.enabled=false
          env:
            MAVEN_USERNAME: ${{ inputs.ossrh_username }}
            MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
