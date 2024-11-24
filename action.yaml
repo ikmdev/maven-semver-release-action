@@ -115,7 +115,7 @@ runs:
          if [ $SET_NEXT_VERSION != '' ]; then
           echo "SnapshotVersion=$SET_NEXT_VERSION" >> $GITHUB_OUTPUT
          elif [ $RELEASE_TYPE == 'major' ]; then
-          echo "SnapshotVersion=((${{steps.splitVersionMinor.outputs._0}} + 1)).0.0-SNAPSHOT" >> $GITHUB_OUTPUT
+          echo "SnapshotVersion=$((${{steps.splitVersionMinor.outputs._0}} + 1)).0.0-SNAPSHOT" >> $GITHUB_OUTPUT
          elif [ $RELEASE_TYPE == 'minor' ]; then
           echo "SnapshotVersion=${{steps.splitVersionMinor.outputs._0}}.$((${{steps.splitVersionMinor.outputs._1}} + 1)).0-SNAPSHOT" >> $GITHUB_OUTPUT
          else 
