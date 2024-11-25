@@ -84,7 +84,7 @@ runs:
       shell: bash
       run: |
         mvn versions:set -DnewVersion=${{ steps.release_version.outputs.release_version }} -DgenerateBackupPoms=false
-        echo "After setting release version"
+        echo "Project version set to release version"
         git status
 
     - name: Commit Release Version Change
@@ -158,14 +158,6 @@ runs:
            MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
            MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
 
-    # - name: Pull Latest Changes Before Next Snapshot Version
-    #   shell: bash
-    #   run: |
-    #     # Ensure the local branch is up-to-date before making new changes
-    #     git fetch origin ${{ inputs.trunk_branch_name }}
-    #     git checkout ${{ inputs.trunk_branch_name }}
-    #     # git reset --hard origin/${{ inputs.trunk_branch_name }}
-
     - name: Determine Next Snapshot Version
       id: next_snapshot_version
       shell: bash
@@ -211,11 +203,8 @@ runs:
     - name: Update Maven Project Version to Next Snapshot Version
       shell: bash
       run: |
-        echo "Before updating next snapshot version:"
-        cat pom.xml
         mvn versions:set -DnewVersion=${{ steps.next_snapshot_version.outputs.next_snapshot_version }} -DgenerateBackupPoms=false -DprocessAllModules
-        echo "After setting next snapshot version"
-        cat pom.xml
+        echo "Project version set to next snapshot version"
 
     - name: Git Status After Version Update
       shell: bash
@@ -239,4 +228,4 @@ runs:
       shell: bash
       run: |
         echo "Released version ${{ steps.release_version.outputs.release_version }}"
-        echo "Updated to next snapshot version ${{ steps.next_snapshot_version.outputs.next_snapshot_version }}"
+        echo "POM file updated to next snapshot version ${{ steps.next_snapshot_version.outputs.next_snapshot_version }}"
