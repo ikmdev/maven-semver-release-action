@@ -1,18 +1,13 @@
-name: SemVer Release Action
-description: Automates semantic versioning and release.
+name: SemVer Release Version
+description: Utilized for creating releases of projects
 
 inputs:
   version_type:
-    description: "Version type to increment (major, minor, patch, select)"
+    description: "Version type to increment (major, minor, patch)"
     required: true
-    default: 'select'
   set_version:
     description: "Set version number explicitly (e.g., 1.2.3). Leave empty to increment."
     required: false
-  trunk_branch_name:
-    description: "The main branch from which releases are made."
-    required: true
-    default: 'main'
   ikmdevops_pat:
     description: "PAT TOKEN for IKMDevops User"
     required: true
@@ -35,197 +30,138 @@ inputs:
     description: "OSSRH Token"
     required: true
 
-outputs:
-  new_version:
-    description: "The new version number."
-
 runs:
   using: "composite"
   steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
       with:
-        token: ${{inputs.ikmdevops_pat}}
-        fetch-depth: 0  # Fetch all history to get all tags
-        ref: ${{ inputs.trunk_branch_name }}
-        persist-credentials: true
+        token: ${{ inputs.ikmdevops_pat }}
 
-    - name: Set up Java
+    - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '21'
-        server-id: ossrh
-        server-username: MAVEN_USERNAME
-        server-password: MAVEN_CENTRAL_TOKEN
+        server-id: 'ossrh'
+        server-username: 'MAVEN_USERNAME'
+        server-password: 'MAVEN_CENTRAL_TOKEN'
         gpg-private-key: ${{ inputs.gpg_key }}
-        gpg-passphrase: MAVEN_GPG_PASSPHRASE
+        gpg-passphrase: 'MAVEN_GPG_PASSPHRASE'
 
-    - name: Verify SNAPSHOT Version
-      shell: bash
-      run: |
-        CURRENT_POM_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-        if [[ "$CURRENT_POM_VERSION" != *-SNAPSHOT ]]; then
-          echo "ERROR: The current version in pom.xml ($CURRENT_POM_VERSION) is not a SNAPSHOT version."
-          exit 1
-        fi
-
-    - name: Determine Release Version
-      id: release_version
-      shell: bash
-      run: |
-        # Remove '-SNAPSHOT' from current pom version
-        CURRENT_POM_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-        RELEASE_VERSION=${CURRENT_POM_VERSION%-SNAPSHOT}
-        echo "Release version: $RELEASE_VERSION"
-        echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
-
-    - name: Update Maven Project Version to Release Version
-      shell: bash
-      run: |
-        mvn versions:set -DnewVersion=${{ steps.release_version.outputs.release_version }} -DgenerateBackupPoms=false
-        echo "Project version set to release version"
-        git status
-
-    - name: Commit Release Version Change
-      shell: bash
-      run: |
-        git config user.name "ikmdevops"
-        git config user.email ${{inputs.ikmdevops_email}}
-        git add pom.xml
-        git commit -m "Prepare release version ${{ steps.release_version.outputs.release_version }}"
-        git push origin HEAD:${{ inputs.trunk_branch_name }}
-
-    - name: Create and Push Tag
-      shell: bash
-      run: |
-        git tag -a v${{ steps.release_version.outputs.release_version }} -m "Release v${{ steps.release_version.outputs.release_version }}"
-        git push origin v${{ steps.release_version.outputs.release_version }}
-        
-    - name: Create Release
-      shell: bash
-      id: create_release
-      run: |
-        curl -L \
-         -X POST \
-         -H "Accept: application/vnd.github+json" \
-         -H "Authorization: Bearer ${{inputs.github_token}}" \
-         -H "X-GitHub-Api-Version: 2022-11-28" \
-         https://api.github.com/repos/${{github.repository}}/releases \
-        -d '{"tag_name":"${{ steps.release_version.outputs.release_version }}","name":"Release ${{ steps.release_version.outputs.release_version }}","body":"Release ${{ steps.release_version.outputs.release_version }}","draft":false,"prerelease":false,"generate_release_notes":false}'
-
-    - name: Output New Version
-      shell: bash
-      run: echo "Released version ${{ steps.release_version.outputs.release_version }}"
-
-    - name: Checkout Code Repository
-      uses: actions/checkout@v4
-      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
+    - name: Build Protoc Docker container
+      if: ${{ github.event.repository.name == 'tinkar-schema' }}
+      uses: docker/build-push-action@v6
       with:
-        ref: ${{ inputs.trunk_branch_name }}
-        persist-credentials: true
+        push: false
+        context: .
+        file: 'protoc.dockerfile'
+        tags: 'tinkar-schema-protoc:latest'
 
-    - name: Maven Build
-      shell: bash
-      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
+    - name: Generate Java Code
+      if: ${{ github.event.repository.name == 'tinkar-schema' }}
       run: |
-        ./mvnw clean install -U \
-         --batch-mode \
-         -e \
-         -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-         -Dmaven.build.cache.enabled=false \
-         -PcodeQuality
+        sudo docker run -v "$PWD/src/main/java-generated:/home/proto-builder/src/main/java-generated" --rm tinkar-schema-protoc:latest
 
-    - name: Publish To OSSRH (Maven Central Staging)
-      shell: bash
-      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
+    - name: List Generated Java Code
+      if: ${{ github.event.repository.name == 'tinkar-schema' }}
       run: |
-        ./mvnw deploy -U\
-            --batch-mode \
-            -e \
-            -U \
-            -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-            -DskipTests \
-            -DskipITs \
-            -Dmaven.main.skip \
-            -Dmaven.test.skip \
-            -DrepositoryId=ossrh \
-            -DrepositoryIdOSSRH='true' \
-            -PstageOSSRH \
-            -Dmaven.build.cache.enabled=false
-         env:
-           MAVEN_USERNAME: ${{ inputs.ossrh_username }}
-           MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
-           MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
+        ls src/main/java-generated
+
+    - name: Extract Current Version
+      id: get_current_version
+      run: |
+        echo "POM_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_OUTPUT
+
+    - name: Verify Snapshot Version
+      if: ${{ !contains(steps.get_current_version.outputs.POM_VERSION, '-SNAPSHOT') }}
+      run: |
+        echo "ERROR: Only SNAPSHOT versions can be released. Current version is ${{ steps.get_current_version.outputs.POM_VERSION }}."
+        exit 1
+
+    - name: Split Version Components
+      id: split_version
+      run: |
+        IFS='-' read -ra VERSION_PARTS <<< "${{ steps.get_current_version.outputs.POM_VERSION }}"
+        echo "RELEASE_VERSION=${VERSION_PARTS[0]}" >> $GITHUB_OUTPUT
+        IFS='.' read -ra NUMBERS <<< "${VERSION_PARTS[0]}"
+        echo "MAJOR=${NUMBERS[0]}" >> $GITHUB_OUTPUT
+        echo "MINOR=${NUMBERS[1]}" >> $GITHUB_OUTPUT
+        echo "PATCH=${NUMBERS[2]}" >> $GITHUB_OUTPUT
 
     - name: Determine Next Snapshot Version
       id: next_snapshot_version
-      shell: bash
       run: |
-        VERSION_TYPE="${{ inputs.version_type }}"
-        SET_VERSION="${{ inputs.set_version }}"
-        RELEASE_VERSION="${{ steps.release_version.outputs.release_version }}"
-        
-        # Split the release version into components
-        IFS='.' read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
-        
-        if [ -n "$SET_VERSION" ]; then
-        # If set_version is provided, increment based on it
-        NEXT_SNAPSHOT_VERSION="${SET_VERSION}-SNAPSHOT"
+        if [ -n "${{ inputs.set_version }}" ]; then
+          echo "NEXT_SNAPSHOT_VERSION=${{ inputs.set_version }}" >> $GITHUB_OUTPUT
         else
-        # Validate that version_type is one of the allowed values
-        if [[ "$VERSION_TYPE" != "major" && "$VERSION_TYPE" != "minor" && "$VERSION_TYPE" != "patch" ]]; then
-         echo "Invalid version_type specified: $VERSION_TYPE. Must be 'major', 'minor', or 'patch'."
-         exit 1
+          case "${{ inputs.version_type }}" in
+            major)
+              NEXT_MAJOR=$((${steps.split_version.outputs.MAJOR} + 1))
+              echo "NEXT_SNAPSHOT_VERSION=${NEXT_MAJOR}.0.0-SNAPSHOT" >> $GITHUB_OUTPUT
+              ;;
+            minor)
+              NEXT_MINOR=$((${steps.split_version.outputs.MINOR} + 1))
+              echo "NEXT_SNAPSHOT_VERSION=${steps.split_version.outputs.MAJOR}.${NEXT_MINOR}.0-SNAPSHOT" >> $GITHUB_OUTPUT
+              ;;
+            patch)
+              NEXT_PATCH=$((${steps.split_version.outputs.PATCH} + 1))
+              echo "NEXT_SNAPSHOT_VERSION=${steps.split_version.outputs.MAJOR}.${steps.split_version.outputs.MINOR}.${NEXT_PATCH}-SNAPSHOT" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "ERROR: Unknown version_type '${{ inputs.version_type }}'."
+              exit 1
+              ;;
+          esac
         fi
-        
-        case "$VERSION_TYPE" in
-         major)
-           MAJOR=$((MAJOR + 1))
-           MINOR=0
-           PATCH=0
-           ;;
-         minor)
-           MINOR=$((MINOR + 1))
-           PATCH=0
-           ;;
-         patch)
-           PATCH=$((PATCH + 1))
-           ;;
-        esac
-        
-        NEXT_SNAPSHOT_VERSION="${MAJOR}.${MINOR}.${PATCH}-SNAPSHOT"
-        fi
-        
-        echo "Next snapshot version: $NEXT_SNAPSHOT_VERSION"
-        echo "next_snapshot_version=$NEXT_SNAPSHOT_VERSION" >> $GITHUB_OUTPUT
 
-    - name: Update Maven Project Version to Next Snapshot Version
-      shell: bash
+    - name: Set Release Version
       run: |
-        mvn versions:set -DnewVersion=${{ steps.next_snapshot_version.outputs.next_snapshot_version }} -DgenerateBackupPoms=false -DprocessAllModules
-        echo "Project version set to next snapshot version"
+        ./mvnw versions:set -DnewVersion=${{ steps.split_version.outputs.RELEASE_VERSION }} -DgenerateBackupPoms=false
 
-    - name: Git Status After Version Update
-      shell: bash
+    - name: Build Release Version
       run: |
-        git status
-        git diff
+        ./mvnw clean install -PcodeQuality,release-enforcement
 
-    - name: Commit Next Snapshot Version Change
-      shell: bash
+    - name: Tag Release
       run: |
         git config user.name "ikmdevops"
-        git config user.email ${{inputs.ikmdevops_email}}
-        git add pom.xml
-        git commit -m "Prepare for next development iteration ${{ steps.next_snapshot_version.outputs.next_snapshot_version }}"
-        
-        # pull latest changes and rebase before pushing
-        git pull --rebase origin ${{ inputs.trunk_branch_name }}
-        git push origin HEAD:${{ inputs.trunk_branch_name }}
+        git config user.email "${{ inputs.ikmdevops_email }}"
+        git add .
+        git commit -m "Release ${{ steps.split_version.outputs.RELEASE_VERSION }}"
+        git tag -a "${{ steps.split_version.outputs.RELEASE_VERSION }}" -m "Release ${{ steps.split_version.outputs.RELEASE_VERSION }}"
+        git push origin HEAD:main
+        git push origin --tags
 
-    - name: Output Release Information
-      shell: bash
+    - name: Set Next Development Version
       run: |
-        echo "Released version ${{ steps.release_version.outputs.release_version }}"
-        echo "POM file updated to next snapshot version ${{ steps.next_snapshot_version.outputs.next_snapshot_version }}"
+        ./mvnw versions:set -DnewVersion=${{ steps.next_snapshot_version.outputs.NEXT_SNAPSHOT_VERSION }} -DgenerateBackupPoms=false
+
+    - name: Commit Next Development Version
+      run: |
+        git add .
+        git commit -m "Set next development version to ${{ steps.next_snapshot_version.outputs.NEXT_SNAPSHOT_VERSION }}"
+        git push origin HEAD:main
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      with:
+        tag_name: ${{ steps.split_version.outputs.RELEASE_VERSION }}
+        release_name: "Release ${{ steps.split_version.outputs.RELEASE_VERSION }}"
+        body: "Release ${{ steps.split_version.outputs.RELEASE_VERSION }}"
+        draft: false
+        prerelease: false
+        token: ${{ inputs.github_token }}
+
+    - name: Publish to OSSRH
+      if: ${{ github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet' }}
+      env:
+        MAVEN_USERNAME: ${{ inputs.ossrh_username }}
+        MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
+        MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
+      run: |
+        ./mvnw deploy
+        -PstageOSSRH
+        -DskipTests
+        -DskipITs
+        -Dmaven.build.cache.enabled=false
