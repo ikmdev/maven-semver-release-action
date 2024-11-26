@@ -60,27 +60,32 @@ runs:
 
     - name: Generate Java Code
       if: ${{ github.event.repository.name == 'tinkar-schema' }}
+      shell: bash
       run: |
         sudo docker run -v "$PWD/src/main/java-generated:/home/proto-builder/src/main/java-generated" --rm tinkar-schema-protoc:latest
 
     - name: List Generated Java Code
       if: ${{ github.event.repository.name == 'tinkar-schema' }}
+      shell: bash
       run: |
         ls src/main/java-generated
 
     - name: Extract Current Version
       id: get_current_version
+      shell: bash
       run: |
         echo "POM_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_OUTPUT
 
     - name: Verify Snapshot Version
       if: ${{ !contains(steps.get_current_version.outputs.POM_VERSION, '-SNAPSHOT') }}
+      shell: bash
       run: |
         echo "ERROR: Only SNAPSHOT versions can be released. Current version is ${{ steps.get_current_version.outputs.POM_VERSION }}."
         exit 1
 
     - name: Split Version Components
       id: split_version
+      shell: bash
       run: |
         IFS='-' read -ra VERSION_PARTS <<< "${{ steps.get_current_version.outputs.POM_VERSION }}"
         echo "RELEASE_VERSION=${VERSION_PARTS[0]}" >> $GITHUB_OUTPUT
@@ -91,6 +96,7 @@ runs:
 
     - name: Determine Next Snapshot Version
       id: next_snapshot_version
+      shell: bash
       run: |
         if [ -n "${{ inputs.set_version }}" ]; then
           echo "NEXT_SNAPSHOT_VERSION=${{ inputs.set_version }}" >> $GITHUB_OUTPUT
@@ -116,14 +122,17 @@ runs:
         fi
 
     - name: Set Release Version
+      shell: bash
       run: |
         ./mvnw versions:set -DnewVersion=${{ steps.split_version.outputs.RELEASE_VERSION }} -DgenerateBackupPoms=false
 
     - name: Build Release Version
+      shell: bash
       run: |
         ./mvnw clean install -PcodeQuality,release-enforcement
 
     - name: Tag Release
+      shell: bash
       run: |
         git config user.name "ikmdevops"
         git config user.email "${{ inputs.ikmdevops_email }}"
@@ -134,10 +143,12 @@ runs:
         git push origin --tags
 
     - name: Set Next Development Version
+      shell: bash
       run: |
         ./mvnw versions:set -DnewVersion=${{ steps.next_snapshot_version.outputs.NEXT_SNAPSHOT_VERSION }} -DgenerateBackupPoms=false
 
     - name: Commit Next Development Version
+      shell: bash
       run: |
         git add .
         git commit -m "Set next development version to ${{ steps.next_snapshot_version.outputs.NEXT_SNAPSHOT_VERSION }}"
@@ -154,6 +165,7 @@ runs:
         token: ${{ inputs.github_token }}
 
     - name: Publish to OSSRH
+      shell: bash
       if: ${{ github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet' }}
       env:
         MAVEN_USERNAME: ${{ inputs.ossrh_username }}
