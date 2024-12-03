@@ -31,10 +31,10 @@ inputs:
   ossrh_token:
     description: "OSSRH Token"
     required: true
-  
+
 
 runs:
-  using: "composite" 
+  using: "composite"
   steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
@@ -60,14 +60,14 @@ runs:
         context: .
         file: protoc.dockerfile
         tags: tinkar-schema-protoc:latest
-  
-  
+
+
     - name: Generate Java Code
       if: github.event.repository.name == 'tinkar-schema'
       shell: bash
       run: |
         sudo docker run -v ./src/main/java-generated:/home/proto-builder/src/main/java-generated --rm tinkar-schema-protoc:latest
-        
+
     - name: list java code
       if: github.event.repository.name == 'tinkar-schema'
       shell: bash
@@ -118,8 +118,11 @@ runs:
           echo "SnapshotVersion=$((${{steps.splitVersionMinor.outputs._0}} + 1)).0.0-SNAPSHOT" >> $GITHUB_OUTPUT
          elif [ $RELEASE_TYPE == 'minor' ]; then
           echo "SnapshotVersion=${{steps.splitVersionMinor.outputs._0}}.$((${{steps.splitVersionMinor.outputs._1}} + 1)).0-SNAPSHOT" >> $GITHUB_OUTPUT
-         else 
-           echo "SnapshotVersion=${{steps.splitVersionMinor.outputs._0}}.${{steps.splitVersionMinor.outputs._1}}.$((${{steps.splitVersionMinor.outputs._2}} + 1))-SNAPSHOT" >> $GITHUB_OUTPUT 
+         elif [ $RELEASE_TYPE == 'patch' ]; then
+          echo "SnapshotVersion=${{steps.splitVersionMinor.outputs._0}}.${{steps.splitVersionMinor.outputs._1}}.$((${{steps.splitVersionMinor.outputs._2}} + 1))-SNAPSHOT" >> $GITHUB_OUTPUT
+         else
+          echo "ERROR: Invalid version_type '${{ inputs.version_type }}'."
+          exit 1
          fi
       env:
         RELEASE_TYPE: ${{inputs.version_type}}
@@ -130,7 +133,7 @@ runs:
       run: |
         echo "Release Version -- ${{steps.splitCurrentVersion.outputs._0}}"
         echo "Snapshot Version -- ${{steps.nextSnapshotVersion.outputs.SnapshotVersion}}"
-          
+
     - name: Print Versions
       shell: bash
       run: |
