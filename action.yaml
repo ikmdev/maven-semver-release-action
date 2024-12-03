@@ -99,7 +99,16 @@ runs:
       shell: bash
       run: |
         if [ -n "${{ inputs.set_version }}" ]; then
+          # Use set_version provided by user 
           echo "NEXT_SNAPSHOT_VERSION=${{ inputs.set_version }}" >> $GITHUB_OUTPUT
+          # Check if set_version ends with '-SNAPSHOT'
+          if [[ "$SET_VERSION" == *"-SNAPSHOT" ]]; then
+            NEXT_SNAPSHOT_VERSION="$SET_VERSION"
+            RELEASE_VERSION="${SET_VERSION%-SNAPSHOT}"
+          else
+            NEXT_SNAPSHOT_VERSION="${SET_VERSION}-SNAPSHOT"
+            RELEASE_VERSION="$SET_VERSION"
+          fi
         else
           case "${{ inputs.version_type }}" in
             major)
