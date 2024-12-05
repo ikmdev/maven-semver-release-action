@@ -74,6 +74,14 @@ runs:
       env:
         RELEASE_TYPE: ${{inputs.version_type}}
 
+
+    - name: Setup Git User
+      shell: bash
+      run: |
+          git config user.name "ikmdevops"
+          git config user.email ${{inputs.ikmdevops_email}}
+
+
     - name: GitFlow Release
       id: gitflow_release
       shell: bash
