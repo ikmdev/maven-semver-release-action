@@ -79,7 +79,7 @@ runs:
       shell: bash
       run: |
           mvn gitflow:release \
-                -DversionDigitToIncrement=${{ steps.configure_version_type.version_type }} \
+                -DversionDigitToIncrement=${{ steps.configure_version_type.outputs.version_type }} \
                 -DpostReleaseGoals="clean install \
                       --batch-mode \
                       -e \
