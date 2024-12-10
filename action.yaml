@@ -70,11 +70,11 @@ runs:
                 --batch-mode \
                 -Dverbose=true \
                 -DreleaseVersion=${{ inputs.release_version }}
-                -DversionDigitToIncrement=${{ steps.configure_version_type.outputs.version_type }} \
                 -DpostReleaseGoals="clean install \
                       --batch-mode \
                       -e \
                       -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
                       -PcodeQuality,release-enforcement \
                       -Dmaven.build.cache.enabled=false" \
-                      -X
+                -DversionDigitToIncrement=${{ steps.configure_version_type.outputs.version_type }} \
+                -X
