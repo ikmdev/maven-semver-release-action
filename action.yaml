@@ -69,7 +69,7 @@ runs:
           ./mvnw gitflow:release \
                 --batch-mode \
                 -Dverbose=true \
-                -DreleaseVersion=${{ inputs.release_version }}
+                -DreleaseVersion=${{ inputs.release_version }} \
                 -DpostReleaseGoals="clean install \
                       --batch-mode \
                       -e \
