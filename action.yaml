@@ -24,10 +24,10 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{inputs.ikmdevops_pat}}
+    # - name: Checkout Repository
+    #   uses: actions/checkout@v4
+    #   with:
+    #     token: ${{inputs.ikmdevops_pat}}
 
     - name: Setup Java
       uses: actions/setup-java@v4
