@@ -7,7 +7,7 @@ inputs:
     description: "Version type to increment (major, minor, patch, pre-release)"
     required: true
     default: 'minor'
-  set_version:
+  release_version:
     description: "Custom release version input"
     required: false
     default: ""
@@ -69,7 +69,7 @@ runs:
           ./mvnw gitflow:release \
                 --batch-mode \
                 -Dverbose=true \
-                -DreleaseVersion=${{ inputs.set_version }} \
+                -DreleaseVersion=${{ inputs.release_version }} \
                 -DpostReleaseGoals="clean install \
                       --batch-mode \
                       -e \
