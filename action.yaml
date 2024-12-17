@@ -11,9 +11,6 @@ inputs:
     description: "Custom release version input"
     required: false
     default: ""
-  ikmdevops_pat:
-    description: "PAT TOKEN for IKMDevops User"
-    required: true
   ikmdevops_email:
     description: "Email For IKMDevops User"
     default: 'devops@ikm.dev'
