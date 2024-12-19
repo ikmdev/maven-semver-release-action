@@ -4,238 +4,69 @@ description: Utilized for creating releases of projects
 # Inputs
 inputs:
   version_type:
-    description: "Version type to increment (major, minor, patch, select)"
+    description: "Version type to increment (major, minor, patch, pre-release)"
     required: true
-    default: 'select'
-  set_version:
-    description: "Set version number explicitly (e.g., 1.2.3-SNAPSHOT). Leave empty to increment."
+    default: 'minor'
+  release_version:
+    description: "Custom release version input"
     required: false
-  ikmdevops_pat:
-    description: "PAT TOKEN for IKMDevops User"
-    required: true
+    default: ""
   ikmdevops_email:
     description: "Email For IKMDevops User"
     default: 'devops@ikm.dev'
   github_token:
     description: "GitHub Token"
     required: true
-  gpg_passphrase:
-    description: "GPG Passphrase"
-    required: true
-  gpg_key:
-    description: "GPG Key"
-    required: true
-  ossrh_username:
-    description: "OSSRH USERNAME"
-    required: true
-  ossrh_token:
-    description: "OSSRH Token"
-    required: true
-
 
 runs:
   using: "composite"
   steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{inputs.ikmdevops_pat}}
-
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '21'
-        server-id: ossrh
-        server-username: MAVEN_USERNAME
-        server-password: MAVEN_CENTRAL_TOKEN
-        gpg-private-key: ${{ inputs.gpg_key }}
-        gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
-    - name: Build Protoc Docker container
-      uses: docker/build-push-action@v6
-      if: github.event.repository.name == 'tinkar-schema'
-      with:
-        push: false
-        context: .
-        file: protoc.dockerfile
-        tags: tinkar-schema-protoc:latest
-
-
-    - name: Generate Java Code
-      if: github.event.repository.name == 'tinkar-schema'
+    - name: Configure Version Type
+      id: configure_version_type
       shell: bash
       run: |
-        sudo docker run -v ./src/main/java-generated:/home/proto-builder/src/main/java-generated --rm tinkar-schema-protoc:latest
-
-    - name: list java code
-      if: github.event.repository.name == 'tinkar-schema'
-      shell: bash
-      run: |
-        ls src/main/java-generated
-
-    - name: Extract Version
-      id: get_current_version
-      shell: bash
-      run: |
-          echo "POM_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_OUTPUT
-
-    - name: Print Maven POM project version
-      shell: bash
-      run: |
-        echo "version = ${{ steps.get_current_version.outputs.POM_VERSION }}"
-
-    - name: Verify Is SNAPSHOT Version
-      if: ${{ !contains(steps.get_current_version.outputs.POM_VERSION, '-SNAPSHOT')}}
-      shell: bash
-      run: |
-        echo "ERROR: Version is set to incompatible version ${{steps.get_current_version.outputs.POM_VERSION}}. Only SNAPSHOT development versions can be converted to a release version."
-        exit 1
-
-    - name: Split version code
-      uses: xom9ikk/split@v1.1
-      id: splitCurrentVersion
-      with:
-        string: ${{steps.get_current_version.outputs.POM_VERSION}}
-        separator: '-'
-        limit: -1
-
-    - name: Split version code - Separate By .
-      uses: xom9ikk/split@v1.1
-      id: splitVersionMinor
-      with:
-        string: ${{steps.splitCurrentVersion.outputs._0}}
-        separator: .
-        limit: -1
-
-    - name: Increment Snapshot Version
-      id: nextSnapshotVersion
-      shell: bash
-      run: |
-         if [ $SET_NEXT_VERSION != '' ]; then
-          echo "SnapshotVersion=$SET_NEXT_VERSION" >> $GITHUB_OUTPUT
-         elif [ $RELEASE_TYPE == 'major' ]; then
-          echo "SnapshotVersion=$((${{steps.splitVersionMinor.outputs._0}} + 1)).0.0-SNAPSHOT" >> $GITHUB_OUTPUT
+         if [ $RELEASE_TYPE == 'major' ]; then 
+          echo "version_type=0" >> $GITHUB_OUTPUT
          elif [ $RELEASE_TYPE == 'minor' ]; then
-          echo "SnapshotVersion=${{steps.splitVersionMinor.outputs._0}}.$((${{steps.splitVersionMinor.outputs._1}} + 1)).0-SNAPSHOT" >> $GITHUB_OUTPUT
+          echo "version_type=1" >> $GITHUB_OUTPUT
          elif [ $RELEASE_TYPE == 'patch' ]; then
-          echo "SnapshotVersion=${{steps.splitVersionMinor.outputs._0}}.${{steps.splitVersionMinor.outputs._1}}.$((${{steps.splitVersionMinor.outputs._2}} + 1))-SNAPSHOT" >> $GITHUB_OUTPUT
+          echo "version_type=2" >> $GITHUB_OUTPUT
+         elif [ $RELEASE_TYPE == 'pre-release' ]; then
+          echo "version_type=3" >> $GITHUB_OUTPUT
          else
           echo "ERROR: Invalid version_type '${{ inputs.version_type }}'."
           exit 1
          fi
       env:
         RELEASE_TYPE: ${{inputs.version_type}}
-        SET_NEXT_VERSION: ${{inputs.set_version}}
 
-    - name: Print Information
+
+    - name: Setup Git User
       shell: bash
       run: |
-        echo "Release Version -- ${{steps.splitCurrentVersion.outputs._0}}"
-        echo "Snapshot Version -- ${{steps.nextSnapshotVersion.outputs.SnapshotVersion}}"
+          git config user.name "ikmdevops"
+          git config user.email ${{ inputs.ikmdevops_email }}
 
-    - name: Print Versions
+
+    - name: GitFlow Release
+      id: gitflow_release
       shell: bash
       run: |
-        echo "Release Version: ${{steps.splitCurrentVersion.outputs._0}}"
-        echo "Next Snapshot Versin: ${{steps.nextSnapshotVersion.outputs.SnapshotVersion}}"
-        echo "RELEASE ENV -- $RELEASE_VERSION"
-
-    - name: Set Release Version
-      shell: bash
-      run: |
-          ./mvnw \
-          --batch-mode \
-          -U \
-          versions:set \
-          -DnewVersion=${{steps.splitCurrentVersion.outputs._0}} \
-          -DgenerateBackupPoms=false \
-          -Dmaven.build.cache.enabled=false
-
-    - name: Build Release Version
-      shell: bash
-      run: |
-           ./mvnw clean install \
+          ./mvnw gitflow:release \
                 --batch-mode \
-                -e \
-                -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-                -PcodeQuality,release-enforcement \
-                -Dmaven.build.cache.enabled=false
-
-    - name: Create tag
-      shell: bash
-      run: |
-           git remote set-url origin https://git:${{inputs.ikmdevops_pat}}@github.com/${{github.repository}}.git
-           git pull -p
-           git add .
-           git config user.name "ikmdevops"
-           git config user.email ${{inputs.ikmdevops_email}}
-           git commit -m 'Release ${{steps.splitCurrentVersion.outputs._0}}'
-           git tag -a ${{steps.splitCurrentVersion.outputs._0}} -m '${{steps.splitCurrentVersion.outputs._0}}' --force
-
-    - name: Set Dev Version
-      shell: bash
-      run: |
-          ./mvnw -B versions:set \
-          -DnewVersion=${{steps.nextSnapshotVersion.outputs.SnapshotVersion}} \
-          -DgenerateBackupPoms=false \
-          --batch-mode
-
-    - name: Commit & Push
-      shell: bash
-      run: |
-           git add .
-           git commit -m 'Set next dev version to ${{steps.nextSnapshotVersion.outputs.SnapshotVersion}}'
-           git push origin HEAD:main
-           git push --tags origin
-
-    - name: Create Release
-      shell: bash
-      id: create_release
-      run: |
-          curl -L \
-           -X POST \
-           -H "Accept: application/vnd.github+json" \
-           -H "Authorization: Bearer ${{inputs.github_token}}" \
-           -H "X-GitHub-Api-Version: 2022-11-28" \
-           https://api.github.com/repos/${{github.repository}}/releases \
-          -d '{"tag_name":"${{steps.splitCurrentVersion.outputs._0}}","name":"Release ${{steps.splitCurrentVersion.outputs._0}}","body":"Release ${{steps.splitCurrentVersion.outputs._0}}","draft":false,"prerelease":false,"generate_release_notes":false}'
-
-    - name: Checkout Code Repository
-      uses: actions/checkout@v4
-      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
-      with:
-        ref: ${{steps.splitCurrentVersion.outputs._0}}
-
-    - name: Maven Build
-      shell: bash
-      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
-      run: |
-       ./mvnw clean install -U \
-        --batch-mode \
-        -e \
-        -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-        -Dmaven.build.cache.enabled=false \
-        -PcodeQuality
-
-    - name: Publish To OSSRH (Maven Central Staging)
-      shell: bash
-      if: github.event.repository.name != 'tinkar-schema' && github.event.repository.name != 'komet'
-      run: |
-          ./mvnw deploy -U\
-              --batch-mode \
-              -e \
-              -U \
-              -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-              -DskipTests \
-              -DskipITs \
-              -Dmaven.main.skip \
-              -Dmaven.test.skip \
-              -DrepositoryId=ossrh \
-              -DrepositoryIdOSSRH='true' \
-              -PstageOSSRH \
-              -Dmaven.build.cache.enabled=false
-      env:
-        MAVEN_USERNAME: ${{ inputs.ossrh_username }}
-        MAVEN_CENTRAL_TOKEN: ${{ inputs.ossrh_token }}
-        MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
+                -Dverbose=true \
+                -DreleaseVersion=${{ inputs.release_version }} \
+                -DpostReleaseGoals="clean install \
+                      --batch-mode \
+                      -e \
+                      -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+                      -PcodeQuality,release-enforcement \
+                      -Dmaven.build.cache.enabled=false" \
+                -DversionDigitToIncrement=${{ steps.configure_version_type.outputs.version_type }} \
+                -X
