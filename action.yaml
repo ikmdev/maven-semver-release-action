@@ -11,6 +11,10 @@ inputs:
     description: "Custom release version input"
     required: false
     default: ""
+  development_version:
+    description: "Custom development version input (If provided, overrides version_type to increment)"
+    required: false
+    default: ""
   ikmdevops_email:
     description: "Email For IKMDevops User"
     default: 'devops@ikm.dev'
@@ -73,4 +77,5 @@ runs:
                       -PcodeQuality,release-enforcement \
                       -Dmaven.build.cache.enabled=false" \
                 -DversionDigitToIncrement=${{ steps.configure_version_type.outputs.version_type }} \
+                -DdevelopmentVersion=${{ inputs.development_version }} \
                 -X
