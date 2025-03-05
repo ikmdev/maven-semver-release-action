@@ -25,6 +25,10 @@ inputs:
     description: "Java Version"
     required: false 
     default: "23"
+  mvn_additional_args:
+    description: "Additional Maven CLI args (no new lines)"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -68,8 +72,11 @@ runs:
       run: |
           ./mvnw gitflow:release \
                 --batch-mode \
+                -X \
                 -Dverbose=true \
                 -DreleaseVersion=${{ inputs.release_version }} \
+                -DversionDigitToIncrement=${{ steps.configure_version_type.outputs.version_type }} \
+                -DdevelopmentVersion=${{ inputs.development_version }} \
                 -DpostReleaseGoals="clean install \
                       --batch-mode \
                       -e \
@@ -77,6 +84,4 @@ runs:
                       -PcodeQuality,release-enforcement \
                       -PgenerateData \
                       -Dmaven.build.cache.enabled=false" \
-                -DversionDigitToIncrement=${{ steps.configure_version_type.outputs.version_type }} \
-                -DdevelopmentVersion=${{ inputs.development_version }} \
-                -X
+                      ${{ inputs.mvn_additional_args }}
