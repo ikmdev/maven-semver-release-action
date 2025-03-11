@@ -83,5 +83,5 @@ runs:
                       -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
                       -PcodeQuality,release-enforcement \
                       -PgenerateData \
-                      -Dmaven.build.cache.enabled=false" \
-                      ${{ inputs.mvn_additional_args }}
+                      -Dmaven.build.cache.enabled=false \
+                      ${{ inputs.mvn_additional_args }}"
