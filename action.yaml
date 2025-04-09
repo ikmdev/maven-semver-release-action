@@ -90,4 +90,4 @@ runs:
                       -PgenerateData \
                       -Dmaven.build.cache.enabled=false \
                       ${{ inputs.mvn_additional_args }}"
-       working-directory: ${{ inputs.working_directory}}
+      working-directory: ${{ inputs.working_directory}}
