@@ -25,6 +25,10 @@ inputs:
     description: "Java Version"
     required: false 
     default: "23"
+  working_directory:
+    description: "Working Directory"
+    required: false
+    default: "."
   mvn_additional_args:
     description: "Additional Maven CLI args (no new lines)"
     required: false
@@ -86,3 +90,4 @@ runs:
                       -PgenerateData \
                       -Dmaven.build.cache.enabled=false \
                       ${{ inputs.mvn_additional_args }}"
+       working-directory: ${{ inputs.working_directory}}
