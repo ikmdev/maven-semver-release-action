@@ -15,6 +15,14 @@ inputs:
     description: "Custom development version input (If provided, overrides version_type to increment)"
     required: false
     default: ""
+  version_property:
+    description: "Custom version property to update. If provided this pom property (e.g., revision) will be updated instead of the project <version>."
+    required: false
+    default: ""
+  skip_update_version:
+    description: "Skips updating the project <version> in the pom. Defaults to false. Typically only used when version_property is set to revision."
+    required: false
+    default: "false"
   ikmdevops_email:
     description: "Email For IKMDevops User"
     default: 'devops@ikm.dev'
@@ -81,6 +89,8 @@ runs:
                 -DreleaseVersion=${{ inputs.release_version }} \
                 -DversionDigitToIncrement=${{ steps.configure_version_type.outputs.version_type }} \
                 -DdevelopmentVersion=${{ inputs.development_version }} \
+                -DversionProperty=${{ inputs.version_property }} \
+                -DskipUpdateVersion=${{ inputs.skip_update_version }} \
                 -DargLine="${{ inputs.mvn_additional_args }}" \
                 -DpostReleaseGoals="clean install \
                       --batch-mode \
