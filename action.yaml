@@ -23,6 +23,10 @@ inputs:
     description: "Skips updating the project <version> in the pom. Defaults to false. Typically only used when version_property is set to revision."
     required: false
     default: "false"
+  skip_test_project:
+    description: "Skips maven test goal during gitflow plugin execution."
+    required: false
+    default: "false"
   ikmdevops_email:
     description: "Email For IKMDevops User"
     default: 'devops@ikm.dev'
@@ -91,6 +95,7 @@ runs:
                 -DdevelopmentVersion=${{ inputs.development_version }} \
                 -DversionProperty=${{ inputs.version_property }} \
                 -DskipUpdateVersion=${{ inputs.skip_update_version }} \
+                -DskipTestProject=${{ inputs.skip_test_project }} \
                 -DargLine="${{ inputs.mvn_additional_args }}" \
                 -DpostReleaseGoals="clean install \
                       --batch-mode \
