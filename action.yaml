@@ -36,7 +36,7 @@ inputs:
   java_version:
     description: "Java Version"
     required: false 
-    default: "23"
+    default: "24"
   working_directory:
     description: "Working Directory"
     required: false
