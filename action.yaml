@@ -90,6 +90,7 @@ runs:
                 --batch-mode \
                 -X \
                 -Dverbose=true \
+                -DmvnExecutable="./mvnw" \
                 -DreleaseVersion=${{ inputs.release_version }} \
                 -DversionDigitToIncrement=${{ steps.configure_version_type.outputs.version_type }} \
                 -DdevelopmentVersion=${{ inputs.development_version }} \
